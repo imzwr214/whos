@@ -1,19 +1,10 @@
 #!name=WhosTV 自动签到
-#!desc=自动抓取 whos.tv Cookie，每日签到，并通过 Telegram Bot 推送结果
+#!desc=参数请在 Egern 模块环境变量中填写：TG_BOT_TOKEN、TG_USER_ID、ENABLE_CAPTURE、TG_NOTIFY_ONLY_FAIL
 #!author=Ray
-#!tag=签到,WhosTV
+#!tag=WhosTV
 
-[Argument]
-ENABLE_CAPTURE = switch,true,tag=开启 Cookie 抓取,desc=true: 打开后登录 whos.tv 或访问任务页会自动抓取 Cookie；抓到后可关闭 | false: 关闭抓取
-CRON_TIME = input,"30 8 * * *",tag=签到执行时间,desc=默认每天 08:30 执行，格式如 30 8 * * *
-WHOSTV_COOKIE = input,"",tag=WhosTV Cookie,desc=可留空；开启抓取后会自动保存。若自动抓取失败，可手动填写完整 Cookie
-TG_BOT_TOKEN = input,"",tag=TG Bot Token,desc=Telegram 机器人 Token，不建议写进公开仓库，只在这里填写
-TG_USER_ID = input,"",tag=TG User ID,desc=接收通知的 Telegram User ID / Chat ID
-TG_NOTIFY_ONLY_FAIL = switch,false,tag=仅失败时通知,desc=false: 成功和失败都推送 | true: 仅失败/异常时推送
+[task_local]
+30 8 * * * https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js, tag=WhosTV 自动签到, enabled=true
 
-[Script]
-http-request ^https:\/\/whos\.tv\/api\/(login|user\/profile|user\/statistics|user\/tasks\/today-points|user\/tasks\/signin) script-path=https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js,tag=WhosTV Cookie 获取,requires-body=false,argument=[{ENABLE_CAPTURE},{WHOSTV_COOKIE}],enable=true
-cron {CRON_TIME} script-path=https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js,tag=WhosTV 自动签到,timeout=120,argument=[{TG_BOT_TOKEN},{TG_USER_ID},{TG_NOTIFY_ONLY_FAIL}],enable=true
-
-[MITM]
+[mitm]
 hostname = whos.tv
