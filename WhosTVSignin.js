@@ -10,7 +10,7 @@
 [task_local]
 30 8 * * * https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js, tag=WhosTV 自动签到, enabled=true
 
-[MITM]
+[mitm]
 hostname = whos.tv
 */
 
@@ -34,15 +34,17 @@ if (manualCookie) writeStore(COOKIE_KEY, manualCookie);
 
 var isRequest = typeof $request !== "undefined";
 
-main()
-  .catch(function (e) {
-    var msg = e && e.message ? e.message : String(e);
-    console.log("[" + SCRIPT_NAME + "] 异常：" + msg);
-    return sendTelegram("❌ " + SCRIPT_NAME + "异常\n\n" + msg, true);
-  })
-  .finally(function () {
+main().then(function () {
+  if (typeof $done !== "undefined") $done({});
+}).catch(function (e) {
+  var msg = e && e.message ? e.message : String(e);
+  console.log("[" + SCRIPT_NAME + "] 异常：" + msg);
+  sendTelegram("❌ " + SCRIPT_NAME + "异常\n\n" + msg, true).then(function () {
+    if (typeof $done !== "undefined") $done({});
+  }).catch(function () {
     if (typeof $done !== "undefined") $done({});
   });
+});
 
 async function main() {
   if (isRequest) {
