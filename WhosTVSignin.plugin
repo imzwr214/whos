@@ -1,10 +1,11 @@
-#!name=WhosTV 自动签到
-#!desc=参数请在 Egern 模块环境变量中填写：TG_BOT_TOKEN、TG_USER_ID、ENABLE_CAPTURE、TG_NOTIFY_ONLY_FAIL
-#!author=Ray
-#!tag=WhosTV
+# WhosTV 自动签到
+# Quantumult X rewrite config
+
+[rewrite_local]
+https://whos.tv/api/ url script-request-header https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js
 
 [task_local]
 30 8 * * * https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js, tag=WhosTV 自动签到, enabled=true
 
-[mitm]
+[MITM]
 hostname = whos.tv
