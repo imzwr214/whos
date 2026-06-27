@@ -2,7 +2,7 @@
 /*
 @Name: WhosTV 自动签到
 @Author: Ray
-@Description: 自动抓取 whos.tv Cookie，每日签到，并通过 Telegram Bot 推送结果。
+@Description: 自动抓取 whos.tv Cookie，每日签到，并通过客户端本地通知结果。
 
 [rewrite_local]
 ^https:\/\/whos\.tv\/api\/(login|user\/profile|user\/statistics|user\/tasks\/today-points|user\/tasks\/signin) url script-request-header https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js
@@ -26,9 +26,6 @@ var API = {
 var ENV = getEnv();
 var enableCapture = toBool(readConfig("ENABLE_CAPTURE", "true"));
 var manualCookie = readConfig("WHOSTV_COOKIE", "");
-var tgToken = readConfig("TG_BOT_TOKEN", "");
-var tgUserId = readConfig("TG_USER_ID", "");
-var notifyOnlyFail = toBool(readConfig("TG_NOTIFY_ONLY_FAIL", "false"));
 
 if (manualCookie && isValidValue(manualCookie)) writeStore(COOKIE_KEY, manualCookie);
 
@@ -39,11 +36,8 @@ main().then(function () {
 }).catch(function (e) {
   var msg = e && e.message ? e.message : String(e);
   console.log("[" + SCRIPT_NAME + "] 异常：" + msg);
-  sendTelegram("❌ " + SCRIPT_NAME + "异常\n\n" + msg, true).then(function () {
-    if (typeof $done !== "undefined") $done({});
-  }).catch(function () {
-    if (typeof $done !== "undefined") $done({});
-  });
+  notifyLocal("WhosTV 脚本异常", msg);
+  if (typeof $done !== "undefined") $done({});
 });
 
 async function main() {
@@ -110,7 +104,6 @@ async function signin() {
   if (!cookie || !isValidValue(cookie)) {
     var noCookieMsg = "没有 Cookie。请开启抓取后登录 whos.tv 并访问任务页。";
     notifyLocal("WhosTV 签到失败", noCookieMsg);
-    await sendTelegram("❌ WhosTV 签到失败\n\n" + noCookieMsg, true);
     return;
   }
 
@@ -145,7 +138,6 @@ async function signin() {
   var msg = buildMessage(signResp.status, signData, statData, todayData, success);
 
   notifyLocal("WhosTV 签到结果", msg.replace(/\n/g, " | "));
-  await sendTelegram(msg, !success);
 }
 
 function buildHeaders(cookie) {
@@ -200,25 +192,6 @@ function buildMessage(status, signData, statData, todayData, success) {
     "连续奖励：" + bonus + " 积分\n" +
     "今日积分：" + todayPoints + "\n" +
     "当前余额：" + balance;
-}
-
-async function sendTelegram(text, isFail) {
-  if (notifyOnlyFail && !isFail) return;
-  if (!tgToken || !tgUserId || !isValidValue(tgToken) || !isValidValue(tgUserId)) {
-    console.log("[" + SCRIPT_NAME + "] 未配置 TG_BOT_TOKEN 或 TG_USER_ID，跳过 Telegram 推送");
-    return;
-  }
-
-  await request({
-    url: "https://api.telegram.org/bot" + tgToken + "/sendMessage",
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: tgUserId,
-      text: text,
-      disable_web_page_preview: true
-    })
-  });
 }
 
 function request(options) {
