@@ -1,13 +1,13 @@
 #!name=WhosTV 自动签到
-#!desc=自动抓取 whos.tv Cookie，每日签到，并通过 Telegram Bot 推送结果。
+#!desc=自动抓取 whos.tv Cookie，每日签到，并通过客户端本地通知结果。
 #!author=Ray
 #!date=2026-06-27
-#!arguments=签到执行时间:30 8 * * *,开启Cookie抓取:true,WhosTV Cookie:xxx,TG Bot Token:xxx,TG User ID:xxx,仅失败时通知:false
-#!arguments-desc=签到执行时间: 默认每天 08:30 执行，格式如 30 8 * * *\n\n开启Cookie抓取\n- true: 打开后登录 whos.tv 或访问积分任务页，会自动抓取 Cookie。抓到后建议关闭\n- false: 关闭抓取\n\nWhosTV Cookie: 可留空或保持 xxx；自动抓取失败时，可手动填写完整 Cookie\n\nTG Bot Token: 选填，Telegram 机器人的 Token\n\nTG User ID: 选填，接收消息的 Telegram User ID / Chat ID\n\n仅失败时通知\n- false: 所有签到结果都发送\n- true: 仅在签到失败或异常时才推送 TG
+#!arguments=签到执行时间:30 8 * * *,开启Cookie抓取:true,WhosTV Cookie:xxx
+#!arguments-desc=签到执行时间: 默认每天 08:30 执行，格式如 30 8 * * *\n\n开启Cookie抓取\n- true: 打开后登录 whos.tv 或访问积分任务页，会自动抓取 Cookie。抓到后建议关闭\n- false: 关闭抓取\n\nWhosTV Cookie: 可留空或保持 xxx；自动抓取失败时，可手动填写完整 Cookie
 
 [Script]
 WhosTV 获取Cookie = type=http-request, pattern=^https:\/\/whos\.tv\/api\/(login|user\/profile|user\/statistics|user\/tasks\/today-points|user\/tasks\/signin), requires-body=false, script-path=https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js, argument="{"ENABLE_CAPTURE":{{{开启Cookie抓取}}}}"
-WhosTV 自动签到 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js, argument="{"WHOSTV_COOKIE":"{{{WhosTV Cookie}}}","TG_BOT_TOKEN":"{{{TG Bot Token}}}","TG_USER_ID":"{{{TG User ID}}}","TG_NOTIFY_ONLY_FAIL":{{{仅失败时通知}}}}"
+WhosTV 自动签到 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/imzwr214/whos/main/WhosTVSignin.js, argument="{"WHOSTV_COOKIE":"{{{WhosTV Cookie}}}"}"
 
 [MITM]
 hostname = %APPEND% whos.tv
