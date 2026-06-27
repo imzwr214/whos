@@ -2,6 +2,8 @@
 #!desc=自动抓取 whos.tv Cookie，每日签到，并通过客户端本地通知结果。
 #!author=Ray
 #!date=2026-06-27
+# 适用软件：Egern
+# 用途：Egern 用户导入此模块，可编辑签到时间、抓取开关和 Cookie。
 #!arguments=签到执行时间:30 8 * * *,开启Cookie抓取:true,WhosTV Cookie:xxx
 #!arguments-desc=签到执行时间: 默认每天 08:30 执行，格式如 30 8 * * *\n\n开启Cookie抓取\n- true: 打开后登录 whos.tv 或访问积分任务页，会自动抓取 Cookie。抓到后建议关闭\n- false: 关闭抓取\n\nWhosTV Cookie: 可留空或保持 xxx；自动抓取失败时，可手动填写完整 Cookie
 
