@@ -1,10 +1,13 @@
 /**
  * WhosTV 自动签到
- * 适配：Egern / Loon 兼容 [Argument] 模板参数
+ * 适配：Egern 模块环境变量 + QX/Surge/Loon 脚本环境
  *
- * 插件参数：
- * - http-request: argument=[{ENABLE_CAPTURE},{WHOSTV_COOKIE}]
- * - cron:         argument=[{TG_BOT_TOKEN},{TG_USER_ID},{TG_NOTIFY_ONLY_FAIL}]
+ * Egern 模块环境变量建议：
+ * TG_BOT_TOKEN=你的 Telegram Bot Token
+ * TG_USER_ID=你的 Telegram User ID / Chat ID
+ * ENABLE_CAPTURE=true
+ * TG_NOTIFY_ONLY_FAIL=false
+ * WHOSTV_COOKIE=可选，自动抓取失败时手动填写
  */
 
 const SCRIPT_NAME = "WhosTV 自动签到";
@@ -16,22 +19,24 @@ const API = {
   todayPoints: "https://whos.tv/api/user/tasks/today-points",
 };
 
-let enableCapture = true;
-let manualCookie = "";
-let tgToken = "";
-let tgUserId = "";
-let notifyOnlyFail = false;
+const ENV = getEnv();
 
-parseArguments();
+const enableCapture = toBool(readConfig("ENABLE_CAPTURE", "true"));
+const manualCookie = readConfig("WHOSTV_COOKIE", "");
+const tgToken = readConfig("TG_BOT_TOKEN", "");
+const tgUserId = readConfig("TG_USER_ID", "");
+const notifyOnlyFail = toBool(readConfig("TG_NOTIFY_ONLY_FAIL", "false"));
+
+if (manualCookie) writeStore(COOKIE_KEY, manualCookie);
 
 const isRequest = typeof $request !== "undefined";
 
 (async () => {
   try {
     if (isRequest) {
-      handleCaptureCookie();
+      captureCookie();
     } else {
-      await handleSignin();
+      await signin();
     }
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
@@ -42,48 +47,21 @@ const isRequest = typeof $request !== "undefined";
   if (typeof $done !== "undefined") $done({});
 });
 
-function parseArguments() {
-  console.log(`[${SCRIPT_NAME}] typeof $argument = ${typeof $argument}`);
-
-  if (typeof $argument !== "object" || $argument === null) {
-    console.log(`[${SCRIPT_NAME}] 未检测到对象形式 $argument，跳过模板参数解析`);
-    return;
-  }
-
-  if ($argument.ENABLE_CAPTURE !== undefined) {
-    enableCapture = $argument.ENABLE_CAPTURE === true || String($argument.ENABLE_CAPTURE) === "true";
-  }
-
-  if (isValid($argument.WHOSTV_COOKIE)) {
-    manualCookie = String($argument.WHOSTV_COOKIE).trim();
-    writeStore(COOKIE_KEY, manualCookie);
-    console.log(`[${SCRIPT_NAME}] 手动 Cookie 已写入本地存储`);
-  }
-
-  if (isValid($argument.TG_BOT_TOKEN)) {
-    tgToken = String($argument.TG_BOT_TOKEN).trim();
-  }
-
-  if (isValid($argument.TG_USER_ID)) {
-    tgUserId = String($argument.TG_USER_ID).trim();
-  }
-
-  if ($argument.TG_NOTIFY_ONLY_FAIL !== undefined) {
-    notifyOnlyFail = $argument.TG_NOTIFY_ONLY_FAIL === true || String($argument.TG_NOTIFY_ONLY_FAIL) === "true";
-  }
-
-  console.log(
-    `[${SCRIPT_NAME}] 参数解析完成：` +
-    ` enableCapture=${enableCapture}` +
-    ` | tgToken=${tgToken ? "已配置" : "未配置"}` +
-    ` | tgUserId=${tgUserId ? "已配置" : "未配置"}` +
-    ` | notifyOnlyFail=${notifyOnlyFail}`
-  );
+function getEnv() {
+  if (typeof ctx !== "undefined" && ctx && ctx.env) return ctx.env;
+  if (typeof $argument === "object" && $argument !== null) return $argument;
+  return {};
 }
 
-function handleCaptureCookie() {
+function readConfig(key, defaultValue) {
+  const v = ENV[key];
+  if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+  return defaultValue;
+}
+
+function captureCookie() {
   if (!enableCapture) {
-    console.log(`[${SCRIPT_NAME}] Cookie 抓取开关已关闭`);
+    console.log(`[${SCRIPT_NAME}] 已关闭自动抓取`);
     return;
   }
 
@@ -91,28 +69,26 @@ function handleCaptureCookie() {
   const cookie = getHeader(headers, "Cookie");
 
   if (!cookie) {
-    console.log(`[${SCRIPT_NAME}] 未从请求中获取到 Cookie`);
-    notifyLocal("WhosTV Cookie 获取失败", "未在请求头中找到 Cookie");
+    notifyLocal("WhosTV Cookie 获取失败", "没有在请求头中找到 Cookie");
     return;
   }
 
   const ok = writeStore(COOKIE_KEY, cookie);
+  const url = String($request.url || "").replace(/\?.*$/, "");
 
   if (ok) {
-    const url = ($request.url || "").replace(/\?.*$/, "");
-    console.log(`[${SCRIPT_NAME}] Cookie 保存成功，来源：${url}`);
-    notifyLocal("WhosTV Cookie 获取成功", "Cookie 已保存，可关闭抓取开关");
+    console.log(`[${SCRIPT_NAME}] Cookie 保存成功：${url}`);
+    notifyLocal("WhosTV Cookie 获取成功", "已保存，成功后可把 ENABLE_CAPTURE 改为 false");
   } else {
-    console.log(`[${SCRIPT_NAME}] Cookie 写入失败`);
     notifyLocal("WhosTV Cookie 保存失败", "写入本地存储失败");
   }
 }
 
-async function handleSignin() {
-  const cookie = readStore(COOKIE_KEY);
+async function signin() {
+  const cookie = readStore(COOKIE_KEY) || manualCookie;
 
   if (!cookie) {
-    const msg = "未检测到 WhosTV Cookie，请开启 Cookie 抓取后登录 whos.tv 或访问积分任务页。";
+    const msg = "没有 Cookie。请把 ENABLE_CAPTURE 设为 true，然后登录 whos.tv 并访问任务页。";
     notifyLocal("WhosTV 签到失败", msg);
     await sendTelegram(`❌ WhosTV 签到失败\n\n${msg}`, true);
     return;
@@ -120,7 +96,7 @@ async function handleSignin() {
 
   const headers = buildHeaders(cookie);
 
-  const signResp = await fetchPromise({
+  const signResp = await request({
     url: API.signin,
     method: "POST",
     headers,
@@ -133,28 +109,20 @@ async function handleSignin() {
   let todayData = {};
 
   try {
-    const statResp = await fetchPromise({
-      url: API.statistics,
-      method: "GET",
-      headers: buildHeaders(cookie),
-    });
+    const statResp = await request({ url: API.statistics, method: "GET", headers });
     statData = parseJson(statResp.body);
   } catch (e) {
-    console.log(`[${SCRIPT_NAME}] 查询积分余额失败：${e.message || e}`);
+    console.log(`[${SCRIPT_NAME}] 查询余额失败：${e.message || e}`);
   }
 
   try {
-    const todayResp = await fetchPromise({
-      url: API.todayPoints,
-      method: "GET",
-      headers: buildHeaders(cookie),
-    });
+    const todayResp = await request({ url: API.todayPoints, method: "GET", headers });
     todayData = parseJson(todayResp.body);
   } catch (e) {
     console.log(`[${SCRIPT_NAME}] 查询今日积分失败：${e.message || e}`);
   }
 
-  const success = isSigninSuccess(signResp.status, signData);
+  const success = isSuccess(signResp.status, signData);
   const msg = buildMessage(signResp.status, signData, statData, todayData, success);
 
   notifyLocal("WhosTV 签到结果", msg.replace(/\n/g, " | "));
@@ -173,7 +141,7 @@ function buildHeaders(cookie) {
   };
 }
 
-function isSigninSuccess(status, data) {
+function isSuccess(status, data) {
   const code = data && data.code;
   const msg = String((data && data.message) || "");
   if (status >= 200 && status < 300 && code === 200000) return true;
@@ -190,49 +158,25 @@ function buildMessage(status, signData, statData, todayData, success) {
   const days = valueOrUnknown(data.consecutive_days);
   const bonus = valueOrDefault(data.streak_bonus, 0);
 
-  const balance =
-    statData?.data?.points_balance ??
-    statData?.data?.points ??
-    statData?.data?.balance ??
-    "未知";
-
-  const todayPoints =
-    todayData?.data?.today_points ??
-    todayData?.data?.points ??
-    "未知";
+  const balance = statData?.data?.points_balance ?? statData?.data?.points ?? statData?.data?.balance ?? "未知";
+  const todayPoints = todayData?.data?.today_points ?? todayData?.data?.points ?? "未知";
 
   const icon = success ? "✅" : "❌";
 
-  return `${icon} WhosTV 签到结果
-
-状态：${signMsg}
-代码：${code}
-本次获得：${earned} 积分
-连续签到：${days} 天
-连续奖励：${bonus} 积分
-今日积分：${todayPoints}
-当前余额：${balance}`;
+  return `${icon} WhosTV 签到结果\n\n状态：${signMsg}\n代码：${code}\n本次获得：${earned} 积分\n连续签到：${days} 天\n连续奖励：${bonus} 积分\n今日积分：${todayPoints}\n当前余额：${balance}`;
 }
 
 async function sendTelegram(text, isFail) {
-  if (notifyOnlyFail && !isFail) {
-    console.log(`[${SCRIPT_NAME}] 仅失败通知已开启，本次成功不推送 TG`);
-    return;
-  }
-
+  if (notifyOnlyFail && !isFail) return;
   if (!tgToken || !tgUserId) {
-    console.log(`[${SCRIPT_NAME}] TG 参数未配置，跳过 TG 推送`);
+    console.log(`[${SCRIPT_NAME}] 未配置 TG_BOT_TOKEN 或 TG_USER_ID，跳过 Telegram 推送`);
     return;
   }
 
-  const url = `https://api.telegram.org/bot${tgToken}/sendMessage`;
-
-  await fetchPromise({
-    url,
+  await request({
+    url: `https://api.telegram.org/bot${tgToken}/sendMessage`,
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: tgUserId,
       text,
@@ -241,40 +185,25 @@ async function sendTelegram(text, isFail) {
   });
 }
 
-function fetchPromise(options) {
+function request(options) {
   return new Promise((resolve, reject) => {
     const method = String(options.method || "GET").toUpperCase();
 
     if (typeof $task !== "undefined") {
       $task.fetch(options).then(
-        (resp) => resolve({
-          status: resp.statusCode,
-          headers: resp.headers || {},
-          body: resp.body || "",
-        }),
+        (resp) => resolve({ status: resp.statusCode, headers: resp.headers || {}, body: resp.body || "" }),
         reject
       );
       return;
     }
 
     if (typeof $httpClient !== "undefined") {
-      const callback = (error, response, body) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve({
-          status: response.status || response.statusCode,
-          headers: response.headers || {},
-          body: body || "",
-        });
+      const cb = (error, response, body) => {
+        if (error) return reject(error);
+        resolve({ status: response.status || response.statusCode, headers: response.headers || {}, body: body || "" });
       };
-
-      if (method === "GET") {
-        $httpClient.get(options, callback);
-      } else {
-        $httpClient.post(options, callback);
-      }
+      if (method === "GET") $httpClient.get(options, cb);
+      else $httpClient.post(options, cb);
       return;
     }
 
@@ -299,30 +228,18 @@ function writeStore(key, value) {
 }
 
 function notifyLocal(title, body) {
-  if (typeof $notification !== "undefined") {
-    $notification.post(title, "", body);
-  } else if (typeof $notify !== "undefined") {
-    $notify(title, "", body);
-  } else {
-    console.log(`[${SCRIPT_NAME}] ${title}: ${body}`);
-  }
+  if (typeof $notification !== "undefined") $notification.post(title, "", body);
+  else if (typeof $notify !== "undefined") $notify(title, "", body);
+  else console.log(`[${SCRIPT_NAME}] ${title}: ${body}`);
 }
 
 function parseJson(body) {
-  try {
-    return JSON.parse(body || "{}");
-  } catch (e) {
-    return {
-      message: body || "非 JSON 返回",
-      data: {},
-    };
-  }
+  try { return JSON.parse(body || "{}"); }
+  catch { return { message: body || "非 JSON 返回", data: {} }; }
 }
 
-function isValid(val) {
-  if (val === undefined || val === null) return false;
-  const s = String(val).trim();
-  return s !== "" && s !== "xxx" && s !== "无" && s.toLowerCase() !== "none";
+function toBool(v) {
+  return v === true || String(v).trim().toLowerCase() === "true" || String(v).trim() === "1";
 }
 
 function valueOrUnknown(v) {
