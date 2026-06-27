@@ -30,7 +30,7 @@ var tgToken = readConfig("TG_BOT_TOKEN", "");
 var tgUserId = readConfig("TG_USER_ID", "");
 var notifyOnlyFail = toBool(readConfig("TG_NOTIFY_ONLY_FAIL", "false"));
 
-if (manualCookie) writeStore(COOKIE_KEY, manualCookie);
+if (manualCookie && isValidValue(manualCookie)) writeStore(COOKIE_KEY, manualCookie);
 
 var isRequest = typeof $request !== "undefined";
 
@@ -56,16 +56,25 @@ async function main() {
 
 function getEnv() {
   if (typeof ctx !== "undefined" && ctx && ctx.env) return ctx.env;
-  if (typeof $argument === "object" && $argument !== null) return $argument;
+
+  if (typeof $argument !== "undefined" && $argument) {
+    try {
+      if (typeof $argument === "string") return JSON.parse($argument);
+      if (typeof $argument === "object") return $argument;
+    } catch (e) {
+      console.log("[" + SCRIPT_NAME + "] 解析 $argument 失败：" + e + "，原始参数：" + $argument);
+    }
+  }
+
   return {};
 }
 
 function readConfig(key, defaultValue) {
   var v = ENV[key];
-  if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+  if (isValidValue(v)) return String(v).trim();
 
   var stored = readStore(key);
-  if (stored !== undefined && stored !== null && String(stored).trim() !== "") return String(stored).trim();
+  if (isValidValue(stored)) return String(stored).trim();
 
   return defaultValue;
 }
@@ -96,9 +105,9 @@ function captureCookie() {
 }
 
 async function signin() {
-  var cookie = readStore(COOKIE_KEY) || manualCookie;
+  var cookie = manualCookie || readStore(COOKIE_KEY);
 
-  if (!cookie) {
+  if (!cookie || !isValidValue(cookie)) {
     var noCookieMsg = "没有 Cookie。请开启抓取后登录 whos.tv 并访问任务页。";
     notifyLocal("WhosTV 签到失败", noCookieMsg);
     await sendTelegram("❌ WhosTV 签到失败\n\n" + noCookieMsg, true);
@@ -195,7 +204,7 @@ function buildMessage(status, signData, statData, todayData, success) {
 
 async function sendTelegram(text, isFail) {
   if (notifyOnlyFail && !isFail) return;
-  if (!tgToken || !tgUserId) {
+  if (!tgToken || !tgUserId || !isValidValue(tgToken) || !isValidValue(tgUserId)) {
     console.log("[" + SCRIPT_NAME + "] 未配置 TG_BOT_TOKEN 或 TG_USER_ID，跳过 Telegram 推送");
     return;
   }
@@ -269,6 +278,13 @@ function parseJson(body) {
 
 function toBool(v) {
   return v === true || String(v).trim().toLowerCase() === "true" || String(v).trim() === "1";
+}
+
+function isValidValue(v) {
+  if (v === undefined || v === null) return false;
+  var s = String(v).trim();
+  if (s === "" || s === "xxx" || s === "无" || s.toLowerCase() === "none") return false;
+  return true;
 }
 
 function valueOrUnknown(v) {
